@@ -1,0 +1,5 @@
+export enum RelationType {
+  PROFESSIONAL = 'PROFESSIONAL',
+  AMICAL = 'AMICAL',
+  ACQUAINTANCE = 'ACQUAINTANCE',
+}

@@ -1,0 +1,427 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserType {
+  USER
+  RECRUITER
+  RECOMMENDER
+}
+
+enum StudyLevelType {
+  BAC
+  BAC_PLUS_2
+  BAC_PLUS_3
+  BAC_PLUS_4
+  BAC_PLUS_5
+  BAC_PLUS_8
+  CAP_SLASH_BEP
+}
+
+// Type d'entreprise
+enum CompanyType {
+  MIC
+  PE
+  PME
+  GE
+}
+
+// Secteur d'activité
+enum CompanySector {
+  AGRICULTURE
+  AGRICULTURE_FARMING
+  AGRICULTURE_FORESTRY
+  AGRICULTURE_FISHING
+
+  INDUSTRY
+  INDUSTRY_FOOD
+  INDUSTRY_AUTOMOTIVE
+  INDUSTRY_WOOD
+  INDUSTRY_CHEMICAL
+  INDUSTRY_ELECTRICAL
+  INDUSTRY_PHARMA
+  INDUSTRY_MECHANICAL
+  INDUSTRY_OTHER_MANUFACTURING
+
+  CONSTRUCTION
+  CONSTRUCTION_BUILDING
+  CONSTRUCTION_CIVIL_ENGINEERING
+  CONSTRUCTION_REAL_ESTATE
+  CONSTRUCTION_ARCHITECTURE
+
+  COMMERCE
+  COMMERCE_WHOLESALE
+  COMMERCE_RETAIL
+  COMMERCE_ECOMMERCE
+  COMMERCE_DISTRIBUTION
+
+  TRANSPORT
+  TRANSPORT_ROAD
+  TRANSPORT_RAIL
+  TRANSPORT_AIR
+  TRANSPORT_MARITIME
+  TRANSPORT_LOGISTICS
+
+  IT
+  IT_SOFTWARE
+  IT_HARDWARE
+  IT_TELECOM
+  IT_DIGITAL_SERVICES
+  IT_CYBERSECURITY
+
+  BUSINESS_SERVICES
+  BUSINESS_SERVICES_CONSULTING
+  BUSINESS_SERVICES_ACCOUNTING
+  BUSINESS_SERVICES_LEGAL
+  BUSINESS_SERVICES_MARKETING
+  BUSINESS_SERVICES_TRAINING
+
+  FINANCE
+  FINANCE_BANKING
+  FINANCE_INSURANCE
+  FINANCE_INVESTMENT
+  FINANCE_FINTECH
+  FINANCE_ACCOUNTING
+
+  ENERGY
+  ENERGY_FOSSIL
+  ENERGY_RENEWABLE
+  ENERGY_NUCLEAR
+  ENERGY_DISTRIBUTION
+  ENERGY_EFFICIENCY
+
+  PUBLIC
+  PUBLIC_ADMINISTRATION
+  PUBLIC_DEFENSE
+  PUBLIC_JUSTICE
+  PUBLIC_EDUCATION
+  PUBLIC_HEALTH
+
+  EDUCATION
+  EDUCATION_PRIMARY
+  EDUCATION_SECONDARY
+  EDUCATION_HIGHER
+  EDUCATION_PROFESSIONAL
+  EDUCATION_SPECIALIZED
+
+  HEALTH
+  HEALTH_HOSPITALS
+  HEALTH_PHARMACY
+  HEALTH_MEDICAL_DEVICES
+  HEALTH_WELLNESS
+  HEALTH_RESEARCH
+
+  LUXURY
+  LUXURY_FASHION
+  LUXURY_JEWELRY
+  LUXURY_COSMETICS
+  LUXURY_AUTOMOTIVE
+  LUXURY_HOSPITALITY
+
+  HOSPITALITY
+  HOSPITALITY_HOTELS
+  HOSPITALITY_RESTAURANTS
+  HOSPITALITY_CATERING
+  HOSPITALITY_EVENTS
+  HOSPITALITY_TOURISM
+
+  LEISURE
+  LEISURE_ENTERTAINMENT
+  LEISURE_SPORTS
+  LEISURE_CULTURE
+  LEISURE_GAMING
+  LEISURE_MEDIA
+
+  HR
+  HR_RECRUITMENT
+  HR_TRAINING
+  HR_PAYROLL
+  HR_CONSULTING
+  HR_OUTPLACEMENT
+
+  ASSOCIATIVE
+  ASSOCIATIVE_NON_PROFIT
+  ASSOCIATIVE_FOUNDATIONS
+  ASSOCIATIVE_CHARITIES
+  ASSOCIATIVE_SOCIAL
+  ASSOCIATIVE_CULTURAL
+
+  RETAIL
+  RETAIL_FOOD
+  RETAIL_FASHION
+  RETAIL_HOME
+  RETAIL_ELECTRONICS
+  RETAIL_SPECIALIZED
+
+  DIGITAL
+  DIGITAL_ECOMMERCE
+  DIGITAL_MARKETING
+  DIGITAL_WEB_DEVELOPMENT
+  DIGITAL_MOBILE_APPS
+  DIGITAL_SERVICES
+
+  GREEN_ENERGY
+  GREEN_ENERGY_SOLAR
+  GREEN_ENERGY_WIND
+  GREEN_ENERGY_HYDRO
+  GREEN_ENERGY_BIOMASS
+  GREEN_ENERGY_STORAGE
+
+  MOBILITY
+  MOBILITY_PUBLIC_TRANSPORT
+  MOBILITY_SHARED
+  MOBILITY_ELECTRIC_VEHICLES
+  MOBILITY_AUTONOMOUS
+  MOBILITY_INFRASTRUCTURE
+
+  SPORT
+  SPORT_EQUIPMENT
+  SPORT_FACILITIES
+  SPORT_EVENTS
+  SPORT_TRAINING
+  SPORT_MEDIA
+
+  SILVER
+  SILVER_HEALTHCARE
+  SILVER_HOUSING
+  SILVER_SERVICES
+  SILVER_WELLNESS
+  SILVER_TECHNOLOGY
+
+  CIRCULAR
+  CIRCULAR_RECYCLING
+  CIRCULAR_WASTE_MANAGEMENT
+  CIRCULAR_REUSE
+  CIRCULAR_REPAIR
+  CIRCULAR_UPCYCLING
+
+  SUSTAINABLE_AGRI
+  SUSTAINABLE_AGRI_ORGANIC
+  SUSTAINABLE_AGRI_PERMACULTURE
+  SUSTAINABLE_AGRI_LOCAL
+  SUSTAINABLE_AGRI_TECHNOLOGY
+  SUSTAINABLE_AGRI_EDUCATION
+
+  ONLINE_EDUCATION
+  ONLINE_EDUCATION_PLATFORMS
+  ONLINE_EDUCATION_CONTENT
+  ONLINE_EDUCATION_TOOLS
+  ONLINE_EDUCATION_CERTIFICATION
+  ONLINE_EDUCATION_CORPORATE
+}
+
+// Statut d'une demande de référence
+enum ReferralStatus {
+  PENDING // Waiting for approval
+  ACCEPTED // Accepted
+  REJECTED // Rejected
+}
+
+// Types pour les abonnements
+enum PricingType {
+  ONE_TIME
+  RECURRING
+}
+
+enum PricingPlanInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum PlanType {
+  STANDARD
+  PREMIUM
+  MASTER
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  PAST_DUE
+  UNPAID
+  PAUSED
+}
+
+enum JobLevel {
+  MAIN_CATEGORY // Yellow - Level 1 (ex: "Agriculture et Pêche")
+  CATEGORY // Pink - Level 2 (ex: "Engins agricoles et forestiers")
+  SUB_CATEGORY // Orange - Level 3 (ex: "Conducteur d'engins d'exploitation forestière")
+  JOB // White - Level 4 (ex: actual jobs)
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String?
+  type              UserType  @default(USER)
+  isActive          Boolean   @default(true)
+  isVerified        Boolean   @default(false)
+  verificationToken String?   @unique
+  tokenExpiry       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  profile Profile?
+  company Company? // Relation avec l'entreprise pour les recruteurs
+
+  // User as a requester (asking to be referred)
+  sentRequests Referral[] @relation("RequestSender")
+
+  // User as a referrer (being asked to refer someone)
+  receivedRequests Referral[] @relation("RequestReceiver")
+
+  // Relation avec la souscription
+  subscription subscriptions?
+}
+
+// Modèle pour les informations d'entreprise des recruteurs
+model Company {
+  id            String        @id @default(uuid())
+  name          String // Nom de l'entreprise (obligatoire)
+  siret         String? // SIRET (non obligatoire)
+  address       String // Adresse (obligatoire)
+  postalCode    String // Code postal (obligatoire)
+  city          String // Ville (obligatoire)
+  companyType   CompanyType // Type d'entreprise (obligatoire)
+  sector        CompanySector // Secteur d'activité (obligatoire)
+  employeeCount Int // Effectif (obligatoire)
+  userPosition  String // Poste de la personne inscrite (obligatoire)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relation avec l'utilisateur recruteur
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+}
+
+model Profile {
+  id              String   @id @default(uuid())
+  firstName       String?
+  lastName        String?
+  phoneNumber     String?
+  linkedinId      String?  @unique
+  linkedinProfile Json?
+  googleId        String?  @unique
+  googleProfile   Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String      @unique
+  studyLevel StudyLevel?
+}
+
+model StudyLevel {
+  id        String         @id @default(uuid())
+  type      StudyLevelType
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // Relations
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String  @unique
+}
+
+// Model for handling referral requests
+model Referral {
+  id                String         @id @default(uuid())
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  status            ReferralStatus @default(PENDING)
+  message           String? // Optional message with the request
+  responseDate      DateTime? // Date when the request was processed
+  responseMessage   String? // Optional message from the referrer
+  referrerFirstName String?
+
+  // Security for invitation links
+  responseToken String? // Secure token for the invitation link
+  tokenExpiry   DateTime? // Expiration date of the token
+
+  // Relations
+  // The user who wants to be referred (requester)
+  requester   User   @relation("RequestSender", fields: [requesterId], references: [id], onDelete: Cascade)
+  requesterId String
+
+  // The user who is asked to refer (potential referrer)
+  referrer   User?   @relation("RequestReceiver", fields: [referrerId], references: [id], onDelete: Cascade)
+  referrerId String?
+
+  @@unique([requesterId, referrerId])
+  @@index([status])
+}
+
+model products {
+  id          String   @id @default(uuid())
+  productId   String   @unique
+  active      Boolean  @default(true)
+  name        String
+  description String?
+  prices      prices[]
+}
+
+model prices {
+  id                  String              @id @default(uuid())
+  priceId             String              @unique
+  productId           String
+  product             products            @relation(fields: [productId], references: [id])
+  description         String?
+  unitAmount          Int
+  currency            String
+  pricingType         PricingType // one_time, recurring
+  pricingPlanInterval PricingPlanInterval // day, week, month, year
+  intervalCount       Int
+  subscriptions       subscriptions[]
+  type                PlanType // standard, premium, master
+}
+
+model subscriptions {
+  id                     String              @id @default(uuid())
+  subscriptionId         String              @unique @default(uuid())
+  providerSubscriptionId String?
+  userId                 String              @unique
+  planType               PlanType
+  user                   User                @relation(fields: [userId], references: [id])
+  status                 SubscriptionStatus? // trialing, active, canceled, incomplete, incomplete_expired, past_due, unpaid, paused
+  quantity               Int?
+  priceId                String?
+  price                  prices?             @relation(fields: [priceId], references: [id])
+  cancelAtPeriodEnd      Boolean             @default(false)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  endedAt                DateTime?
+  cancelAt               DateTime?
+  canceledAt             DateTime?
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  name        String // The name of the job or category
+  code        String? // OGR code (from column E)
+  identifiers String? // The alphanumeric codes (A 11 01, A 11 02, etc.)
+  level       JobLevel // The hierarchical level (MAIN_CATEGORY, CATEGORY, etc.)
+
+  parentId String? // Foreign key to parent
+  parent   Job?    @relation("JobHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children Job[]   @relation("JobHierarchy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
