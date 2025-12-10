@@ -1,10 +1,10 @@
-import { IsEmail, IsNotEmpty, IsString, IsEnum, Length } from "class-validator";
-import { RelationType } from "../enums/relation-type.enum";
-import { ApiProperty } from "@nestjs/swagger";
+import { IsEmail, IsNotEmpty, IsString, IsEnum, Length } from 'class-validator';
+import { RelationType } from '../enums/relation-type.enum';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateReferralWithMailDto {
   @ApiProperty({
-    description: 'Email de l\'utilisateur',
+    description: "Email de l'utilisateur",
     example: 'john.doe@example.com',
   })
   @IsEmail()
@@ -12,7 +12,7 @@ export class CreateReferralWithMailDto {
   email: string;
 
   @ApiProperty({
-    description: 'Prénom de l\'utilisateur',
+    description: "Prénom de l'utilisateur",
     example: 'John',
   })
   @IsString()
@@ -20,7 +20,7 @@ export class CreateReferralWithMailDto {
   firstName: string;
 
   @ApiProperty({
-    description: 'Nom de l\'utilisateur',
+    description: "Nom de l'utilisateur",
     example: 'Doe',
   })
   @IsString()
@@ -28,7 +28,7 @@ export class CreateReferralWithMailDto {
   lastName: string;
 
   @ApiProperty({
-    description: 'Message de l\'utilisateur',
+    description: "Message de l'utilisateur",
     example: 'Bonjour, je souhaite être référé par vous.',
   })
   @IsString()
@@ -37,7 +37,7 @@ export class CreateReferralWithMailDto {
   message: string;
 
   @ApiProperty({
-    description: 'Type de relation de l\'utilisateur',
+    description: "Type de relation de l'utilisateur",
     example: 'PROFESSIONAL',
   })
   @IsEnum(RelationType)

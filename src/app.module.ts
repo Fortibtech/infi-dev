@@ -14,6 +14,7 @@ import { PublicReferralsModule } from './referrals/public-referrals.module';
 import { CompanyModule } from './company/company.module';
 import { StripeModule } from './stripe/stripe.module';
 import { JobsFtModule } from './jobs_ft/jobs_ft.module';
+import { SupabaseModule } from './supabase/supabase.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { JobsFtModule } from './jobs_ft/jobs_ft.module';
     CompanyModule,
     StripeModule,
     JobsFtModule,
+    SupabaseModule,
   ],
   controllers: [AppController],
 })

@@ -5,7 +5,6 @@ import {
   Body,
   Patch,
   Param,
-  Delete,
   UseGuards,
   Req,
   Query,
@@ -13,7 +12,6 @@ import {
 import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/guards/roles.guard';
@@ -21,8 +19,9 @@ import { UserType } from '@prisma/client';
 import { Request } from 'express';
 import { AuthenticatedUser } from 'src/auth/types';
 import { SearchCompanyDto } from './dto/search-company.dto';
+import { SupabaseAuthGuard } from 'src/auth/guards/supabase-auth.guard';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(SupabaseAuthGuard, RolesGuard)
 @Roles(UserType.RECRUITER)
 @ApiBearerAuth('JWT-auth')
 @Controller('company')
@@ -46,5 +45,4 @@ export class CompanyController {
   update(@Param('id') id: string, @Body() updateCompanyDto: UpdateCompanyDto) {
     return this.companyService.update(id, updateCompanyDto);
   }
-
 }

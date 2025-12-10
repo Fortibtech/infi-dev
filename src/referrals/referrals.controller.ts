@@ -9,7 +9,6 @@ import {
   UnauthorizedException,
   UseGuards,
   Query,
-  BadRequestException,
 } from '@nestjs/common';
 import { ReferralsService } from './referrals.service';
 import { CreateReferralDto } from './dto/create-referral.dto';
@@ -17,9 +16,7 @@ import { UpdateReferralDto } from './dto/update-referral.dto';
 import { Request } from 'express';
 import { Req } from '@nestjs/common';
 import { AuthenticatedUser } from '../auth/types';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { UserType, ReferralStatus } from '@prisma/client';
+import { UserType } from '@prisma/client';
 import { Roles } from '../common/guards/roles.guard';
 import {
   ApiTags,
@@ -35,10 +32,10 @@ import {
 } from '@nestjs/swagger';
 import { PrismaService } from '../database/prisma.service';
 import { CreateReferralWithMailDto } from './dto/create-referral-with-mail.dto';
+import { SupabaseAuthGuard } from 'src/auth/guards/supabase-auth.guard';
 @ApiTags('Parrainages')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('referrals')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserType.USER, UserType.RECOMMENDER)
 export class ReferralsController {
   constructor(
@@ -47,6 +44,8 @@ export class ReferralsController {
   ) {}
 
   @Post('create')
+  @UseGuards(SupabaseAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Créer une demande de parrainage',
     description:
@@ -74,6 +73,8 @@ export class ReferralsController {
   }
 
   @Get()
+  @UseGuards(SupabaseAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Lister toutes les demandes de parrainage',
     description:
@@ -232,8 +233,11 @@ export class ReferralsController {
     description: 'Crée une demande de parrainage avec un email',
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  createWithMail(@Body() createReferralWithMailDto: CreateReferralWithMailDto, @Req() req: Request) {
+  @UseGuards(SupabaseAuthGuard)
+  createWithMail(
+    @Body() createReferralWithMailDto: CreateReferralWithMailDto,
+    @Req() req: Request,
+  ) {
     return this.referralsService.createWithMail(createReferralWithMailDto, req);
   }
 }

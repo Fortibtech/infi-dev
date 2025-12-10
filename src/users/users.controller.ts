@@ -6,24 +6,17 @@ import {
   Param,
   Put,
   Delete,
-  UseGuards,
   NotFoundException,
   ClassSerializerInterceptor,
   UseInterceptors,
   Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import {
-  UserDto,
-  UserCreateDto,
-  UserUpdateDto,
-  UserResponseDto,
-} from './dto/user.dto';
+import { UserCreateDto, UserUpdateDto, UserResponseDto } from './dto/user.dto';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';

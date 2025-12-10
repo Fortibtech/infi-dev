@@ -9,33 +9,33 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../prisma/services/user.service';
 import { ProfileService } from '../prisma/services/profile.service';
-import { RegisterDto, JwtPayload } from './dto/auth.dto';
+import { RegisterDto, JwtPayload, LoginDto } from './dto/auth.dto';
 import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
 import { v4 as uuidv4 } from 'uuid';
 import { add } from 'date-fns';
 import { HttpService } from '@nestjs/axios';
-import {
-  Profile,
-  User,
-  Prisma,
-  UserType,
-  ReferralStatus,
-} from '@prisma/client';
+import { Profile, User, Prisma, UserType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { AxiosError, AxiosResponse } from 'axios';
+import { SupabaseService } from 'src/supabase/supabase.service';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-
+  private supabase: SupabaseClient;
   constructor(
+    private supabaseService: SupabaseService,
     private usersService: UsersService,
     private profileService: ProfileService,
     private jwtService: JwtService,
     private emailService: EmailService,
     private readonly httpService: HttpService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) {
+    this.supabase = this.supabaseService.getClient();
+  }
 
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.usersService.user({ email });
@@ -48,65 +48,49 @@ export class AuthService {
       return null;
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = (await bcrypt.compare(
+      password,
+      user.password,
+    )) as boolean;
 
     if (!isPasswordValid) {
       return null;
     }
 
-    const { password: _, ...result } = user;
-    return result;
+    return {
+      ...user,
+      password: undefined,
+    };
   }
 
   /**
    * Login email + mot de passe
    * Retourne { accessToken, onboardingTermine, user, cookie }
    */
-  async login(user: any) {
-    if (!user.isVerified) {
+  async login(loginDto: LoginDto) {
+    const { data, error } = await this.supabase.auth.signInWithPassword({
+      email: loginDto.email,
+      password: loginDto.password,
+    });
+    if (error || !data.user) {
       throw new UnauthorizedException(
-        'Veuillez vérifier votre email avant de vous connecter',
+        `Échec de l'authentification Supabase: ${error?.message || 'Utilisateur non trouvé'}`,
       );
     }
-
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-    };
-
-    const profile = await this.profileService.profileByUserId(user.id);
-    const accessToken = this.jwtService.sign(payload);
-    const onboardingTermine = await this.isOnboardingCompleted(user.id);
-
-    const cookie = {
-      name: 'auth_token',
-      value: accessToken,
-      options: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax' as const,
-        maxAge: 24 * 60 * 60 * 1000, // 24 heures
-        path: '/',
-      },
-    };
-
+    const user = await this.usersService.user({ email: loginDto.email });
+    const isOnboardingCompleted = await this.isOnboardingCompleted(user!.id);
     return {
-      accessToken,
-      onboardingTermine,
+      accessToken: data.session?.access_token || '',
+      refreshToken: data.session?.refresh_token || '',
+      onboardingCompleted: isOnboardingCompleted,
       user: {
-        id: user.id,
-        email: user.email,
-        type: user.type,
-        isActive: user.isActive,
-        isVerified: user.isVerified,
-        profile: profile
-          ? {
-              firstName: profile.firstName,
-              lastName: profile.lastName,
-            }
-          : undefined,
+        id: user!.id,
+        email: user!.email,
+        type: user!.type,
+        isActive: user!.isActive,
+        isVerified: user!.isVerified,
+        isFirstLogin: !isOnboardingCompleted,
       },
-      cookie,
     };
   }
 
@@ -122,12 +106,15 @@ export class AuthService {
     if (existingUser) {
       throw new ConflictException('Cet email est déjà utilisé');
     }
-
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-    const type = registerDto.type;
-    const verificationToken = uuidv4();
-    const tokenExpiry = add(new Date(), { hours: 24 });
-
+    const { data, error } = await this.supabase.auth.signUp({
+      email: registerDto.email,
+      password: registerDto.password,
+    });
+    if (error) {
+      throw new BadRequestException(
+        `Erreur lors de la création de l'utilisateur Supabase: ${error.message}`,
+      );
+    }
     const profileData: {
       firstName: string;
       lastName: string;
@@ -135,37 +122,15 @@ export class AuthService {
     } = {
       firstName: registerDto.firstName,
       lastName: registerDto.lastName,
+      phoneNumber: registerDto.phoneNumber,
     };
-
-    if (registerDto.phoneNumber) {
-      profileData.phoneNumber = registerDto.phoneNumber;
-    }
-
     const newUser = await this.usersService.createUser({
       email: registerDto.email,
-      password: hashedPassword,
-      verificationToken,
-      tokenExpiry,
-      isVerified: false,
-      type,
+      type: registerDto.type,
       profile: {
         create: profileData,
       },
     });
-
-    const firstName = registerDto.firstName || '';
-    await this.emailService.sendVerificationEmail(
-      newUser.email,
-      firstName,
-      verificationToken,
-    );
-
-    const payload: JwtPayload = {
-      sub: newUser.id,
-      email: newUser.email,
-    };
-
-    const accessToken = this.jwtService.sign(payload);
 
     if (registerDto.referralToken) {
       const referral = await this.prisma.referral.findFirst({
@@ -205,40 +170,16 @@ export class AuthService {
       }
     }
 
-    const cookie = {
-      name: 'auth_token',
-      value: accessToken,
-      options: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax' as const,
-        maxAge: 24 * 60 * 60 * 1000, // 24 heures
-        path: '/',
-      },
-    };
-
     return {
-      accessToken,
-      onboardingTermine: false,
+      accessToken: data.session?.access_token || '',
+      onboardingCompleted: false,
       user: {
-        id: newUser.id,
-        email: newUser.email,
-        type: newUser.type,
-        isActive: newUser.isActive,
-        isVerified: newUser.isVerified,
-        profile: {
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-        },
+        id: data.user?.id || '',
+        ...registerDto,
+        email: data.user?.email || '',
       },
-      cookie,
-      message: 'Un email de vérification a été envoyé à votre adresse email',
     };
   }
-
-  // --- le reste de ton fichier (verifyEmail, resendVerificationEmail, OAuth, isOnboardingCompleted)
-  // ne change pas, recolle ton code existant tel quel en dessous ---
-
   async verifyEmail(token: string) {
     const user = await this.usersService.user({ verificationToken: token });
 
@@ -306,7 +247,14 @@ export class AuthService {
 
   // Authentification LinkedIn
   async validateLinkedInUser(
-    profile: any,
+    profile: {
+      id?: string;
+      displayName?: string;
+      name?: { familyName?: string; givenName?: string };
+      emails?: { value?: string }[];
+      photos?: { value?: string }[];
+      phoneNumber?: string;
+    },
     accessToken?: string,
     userType?: string | null,
     referralToken?: string | null,
@@ -350,15 +298,15 @@ export class AuthService {
         );
       } catch (error) {
         this.logger.error(
-          `Erreur lors de la récupération des infos LinkedIn: ${error.message}`,
-          error.stack,
+          `Erreur lors de la récupération des infos LinkedIn: ${(error as Error).message}`,
+          (error as Error).stack,
         );
       }
     }
 
     // Si les informations OIDC ne sont pas complètes, essayer d'extraire du profil
     if (!email && profile.emails && profile.emails.length > 0) {
-      email = profile.emails[0].value;
+      email = profile.emails[0].value || '';
     }
 
     if (!linkedinId && profile.id) {
@@ -411,7 +359,7 @@ export class AuthService {
       pictureUrl,
       linkedinId,
       phoneNumber,
-      raw: profile, // Garder le profil brut
+      raw: profile as Record<string, any>, // Garder le profil brut
       lastUpdated: new Date().toISOString(),
     };
 
@@ -436,7 +384,7 @@ export class AuthService {
               userType.toUpperCase(),
             )
           ) {
-            userUpdateData.type = userType.toUpperCase() as any;
+            userUpdateData.type = userType.toUpperCase() as UserType;
             this.logger.log(
               `Mise à jour du type d'utilisateur vers: ${userType.toUpperCase()}`,
             );
@@ -493,11 +441,11 @@ export class AuthService {
         return user;
       } catch (error) {
         this.logger.error(
-          `Erreur lors de la mise à jour de l'utilisateur/profil: ${error.message}`,
-          error.stack,
+          `Erreur lors de la mise à jour de l'utilisateur/profil: ${(error as Error).message}`,
+          (error as Error).stack,
         );
         throw new Error(
-          `Erreur lors de la mise à jour de l'utilisateur/profil: ${error.message}`,
+          `Erreur lors de la mise à jour de l'utilisateur/profil: ${(error as Error).message}`,
         );
       }
     }
@@ -525,7 +473,7 @@ export class AuthService {
         userType &&
         ['USER', 'RECRUITER', 'RECOMMENDER'].includes(userType.toUpperCase())
       ) {
-        userData.type = userType.toUpperCase() as any;
+        userData.type = userType.toUpperCase() as UserType;
         this.logger.log(
           `Définition du type d'utilisateur: ${userType.toUpperCase()}`,
         );
@@ -583,7 +531,7 @@ export class AuthService {
           }
         } catch (error) {
           this.logger.error(
-            `Erreur lors du traitement du token de parrainage: ${error.message}`,
+            `Erreur lors du traitement du token de parrainage: ${(error as Error).message}`,
           );
           // On ne bloque pas la création de l'utilisateur en cas d'erreur de parrainage
         }
@@ -593,24 +541,34 @@ export class AuthService {
       return newUser;
     } catch (error) {
       this.logger.error(
-        `Erreur lors de la création de l'utilisateur: ${error.message}`,
-        error.stack,
+        `Erreur lors de la création de l'utilisateur: ${(error as Error).message}`,
+        (error as Error).stack,
       );
       throw new Error(
-        `Erreur lors de la création de l'utilisateur: ${error.message}`,
+        `Erreur lors de la création de l'utilisateur: ${(error as Error).message}`,
       );
     }
   }
 
   // Récupérer les informations utilisateur depuis l'endpoint userinfo d'OpenID Connect
-  private async fetchLinkedInUserInfo(accessToken: string): Promise<any> {
+  private async fetchLinkedInUserInfo(accessToken: string) {
     try {
       this.logger.log(
         'Début de la récupération des informations utilisateur LinkedIn',
       );
 
       // Utiliser le endpoint userinfo correct pour OpenID Connect selon la documentation de LinkedIn
-      const response = await this.httpService.axiosRef.get(
+      const response: AxiosResponse<{
+        sub?: string;
+        email?: string;
+        email_verified?: boolean;
+        given_name?: string;
+        family_name?: string;
+        name?: string;
+        picture?: string;
+        locale?: string;
+        raw_response?: any;
+      }> = await this.httpService.axiosRef.get(
         'https://api.linkedin.com/v2/userinfo',
         {
           headers: {
@@ -649,18 +607,30 @@ export class AuthService {
       //   "email": "doe@email.com",
       //   "email_verified": true
       // }
-
+      const responseData = response.data as {
+        sub?: string;
+        email?: string;
+        email_verified?: boolean;
+        given_name?: string;
+        family_name?: string;
+        name?: string;
+        picture?: string;
+        locale?: string;
+        raw_response?: any;
+        phoneNumber?: string;
+      };
       // Créer un objet plus complet avec des valeurs par défaut
       const userInfo = {
-        sub: response.data.sub || '',
-        email: response.data.email || '',
-        email_verified: response.data.email_verified || false,
-        given_name: response.data.given_name || '',
-        family_name: response.data.family_name || '',
-        name: response.data.name || '',
-        picture: response.data.picture || '',
-        locale: response.data.locale || '',
-        raw_response: response.data,
+        sub: responseData.sub || '',
+        email: responseData.email || '',
+        email_verified: responseData.email_verified || false,
+        given_name: responseData.given_name || '',
+        family_name: responseData.family_name || '',
+        name: responseData.name || '',
+        picture: responseData.picture || '',
+        locale: responseData.locale || '',
+        raw_response: responseData,
+        phoneNumber: responseData.phoneNumber || '',
       };
 
       this.logger.log(
@@ -669,28 +639,32 @@ export class AuthService {
       return userInfo;
     } catch (error) {
       this.logger.error(
-        `Erreur lors de la récupération des informations LinkedIn: ${error.message}`,
+        `Erreur lors de la récupération des informations LinkedIn: ${(error as AxiosError).message}`,
       );
 
-      if (error.response) {
+      if ((error as AxiosError).response) {
         this.logger.error(
-          `Données de réponse d'erreur: ${JSON.stringify(error.response.data)}`,
+          `Données de réponse d'erreur: ${JSON.stringify((error as AxiosError).response?.data)}`,
         );
-        this.logger.error(`Statut de la réponse: ${error.response.status}`);
         this.logger.error(
-          `En-têtes de la réponse: ${JSON.stringify(error.response.headers)}`,
+          `Statut de la réponse: ${(error as AxiosError).response?.status}`,
         );
-      } else if (error.request) {
+        this.logger.error(
+          `En-têtes de la réponse: ${JSON.stringify((error as AxiosError).response?.headers)}`,
+        );
+      } else if ((error as AxiosError).request) {
         this.logger.error('Requête envoyée mais pas de réponse reçue');
         this.logger.error(
-          `Détails de la requête: ${JSON.stringify(error.request)}`,
+          `Détails de la requête: ${JSON.stringify((error as AxiosError).request)}`,
         );
       } else {
-        this.logger.error(`Erreur de configuration: ${error.message}`);
+        this.logger.error(
+          `Erreur de configuration: ${(error as AxiosError).message}`,
+        );
       }
 
       throw new Error(
-        `Échec de la récupération des informations utilisateur LinkedIn: ${error.message}`,
+        `Échec de la récupération des informations utilisateur LinkedIn: ${(error as AxiosError).message}`,
       );
     }
   }
@@ -728,13 +702,12 @@ export class AuthService {
     }
 
     // Exclure les informations sensibles
-    const { password, verificationToken, tokenExpiry, ...userInfo } =
-      updatedUser;
+    const { ...userInfo } = updatedUser;
 
     // Extraction sécurisée du pictureUrl depuis linkedinProfile du profil
     const profilePicture = userProfile?.linkedinProfile
       ? typeof userProfile.linkedinProfile === 'object'
-        ? (userProfile.linkedinProfile as Record<string, any>).pictureUrl ||
+        ? (userProfile.linkedinProfile as Record<string, string>).pictureUrl ||
           null
         : null
       : null;
@@ -777,7 +750,13 @@ export class AuthService {
 
   // Authentification Google
   async validateGoogleUser(
-    profile: any,
+    profile: {
+      id?: string;
+      displayName?: string;
+      name?: { familyName?: string; givenName?: string };
+      emails?: { value?: string }[];
+      photos?: { value?: string }[];
+    },
     accessToken?: string,
     userType?: string | null,
     referralToken?: string | null,
@@ -857,7 +836,7 @@ export class AuthService {
       this.logger.log(`Création d'un nouvel utilisateur avec Google: ${email}`);
 
       // Déterminer le type d'utilisateur basé sur le paramètre userType
-      let userTypeEnum;
+      let userTypeEnum: UserType;
       if (userType) {
         try {
           // Convertir typeUser (recruiter, recommender) en UserType enum (RECRUITER, RECOMMENDER)
@@ -870,7 +849,7 @@ export class AuthService {
           }
         } catch (error) {
           this.logger.error(
-            `Erreur lors de la conversion du type d'utilisateur: ${error.message}`,
+            `Erreur lors de la conversion du type d'utilisateur: ${(error as Error).message}`,
           );
           userTypeEnum = UserType.USER;
         }
@@ -945,7 +924,7 @@ export class AuthService {
           }
         } catch (error) {
           this.logger.error(
-            `Erreur lors du traitement du token de parrainage: ${error.message}`,
+            `Erreur lors du traitement du token de parrainage: ${(error as Error).message}`,
           );
           // On ne bloque pas la création de l'utilisateur en cas d'erreur de parrainage
         }
@@ -1031,13 +1010,13 @@ export class AuthService {
     }
 
     // Exclure les informations sensibles
-    const { password, verificationToken, tokenExpiry, ...userInfo } =
-      updatedUser;
+    const { ...userInfo } = updatedUser;
 
     // Extraction sécurisée du pictureUrl depuis googleProfile du profil
     const profilePicture = userProfile?.googleProfile
       ? typeof userProfile.googleProfile === 'object'
-        ? (userProfile.googleProfile as Record<string, any>).pictureUrl || null
+        ? (userProfile.googleProfile as Record<string, string>).pictureUrl ||
+          null
         : null
       : null;
 

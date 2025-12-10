@@ -10,7 +10,6 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto, LoginDto, AuthResponse } from './dto/auth.dto';
 import { IsVerifiedGuard } from './guards/is-verified.guard';
@@ -26,7 +25,8 @@ import {
   ApiQuery,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { ThrottlerGuard, Throttle } from 'src/common/guards/throttler.guard';
+import { Throttle } from 'src/common/guards/throttler.guard';
+import { User } from '@prisma/client';
 
 @ApiTags('Authentification')
 @Controller('auth')
@@ -37,7 +37,6 @@ export class AuthController {
   ) {}
 
   @Post('login')
-  @UseGuards(LocalAuthGuard)
   @ApiOperation({ summary: 'Connexion avec email et mot de passe' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
@@ -47,19 +46,9 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Authentification échouée' })
   @HttpCode(200)
-  async login(@Request() req, @Res({ passthrough: true }) res: Response) {
-    const authResult = await this.authService.login(req.user);
-
-    if (authResult.cookie) {
-      res.cookie(
-        authResult.cookie.name,
-        authResult.cookie.value,
-        authResult.cookie.options,
-      );
-    }
-
-    const { cookie, ...responseData } = authResult;
-    return responseData; // { accessToken, onboardingTermine, user }
+  async login(@Body() loginDto: LoginDto) {
+    const authResult = await this.authService.login(loginDto);
+    return { ...authResult, cookie: undefined };
   }
 
   @Post('register')
@@ -71,22 +60,9 @@ export class AuthController {
     type: AuthResponse,
   })
   @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
-  async register(
-    @Body() registerDto: RegisterDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async register(@Body() registerDto: RegisterDto) {
     const result = await this.authService.register(registerDto);
-
-    if (result.cookie) {
-      res.cookie(
-        result.cookie.name,
-        result.cookie.value,
-        result.cookie.options,
-      );
-    }
-
-    const { cookie, ...responseData } = result;
-    return responseData; // { accessToken, onboardingTermine:false, user, message }
+    return result;
   }
 
   @Get('verify')
@@ -161,11 +137,10 @@ export class AuthController {
     description: "Redirection vers la page d'accueil avec token",
   })
   async linkedinAuthCallback(
-    @Request() req,
+    @Request() req: { user: User; originalRequestUrl?: string; session?: any },
     @Res() res: Response,
     @Query('state') state: string,
   ) {
-    // Afficher le state brut
     console.log('State brut reçu:', state);
 
     // Afficher l'URL originale décodée
@@ -176,7 +151,7 @@ export class AuthController {
 
         // Essayer d'extraire le typeUser si c'est un JSON valide
         try {
-          const stateObj = JSON.parse(originalUrl);
+          const stateObj = JSON.parse(originalUrl) as { url: string };
           if (stateObj && stateObj.url) {
             const url = new URL(stateObj.url);
             const typeUser = url.searchParams.get('typeUser');
@@ -188,6 +163,10 @@ export class AuthController {
             }
           }
         } catch (jsonError) {
+          console.error(
+            "Le state n'est pas un JSON valide, tentative d'extraction directe:",
+            (jsonError as Error).message,
+          );
           // Si ce n'est pas un JSON valide, essayer de parser directement comme URL
           try {
             const url = new URL(originalUrl);
@@ -201,7 +180,7 @@ export class AuthController {
           } catch (urlError) {
             console.error(
               "Impossible de parser l'URL originale:",
-              urlError.message,
+              (urlError as Error).message,
             );
           }
         }
@@ -286,7 +265,7 @@ export class AuthController {
     description: 'Redirection vers le frontend avec le token',
   })
   async googleAuthCallback(
-    @Request() req,
+    @Request() req: { user: User; session?: any },
     @Res() res: Response,
     @Query('state') state: string,
   ) {
@@ -341,20 +320,19 @@ export class AuthController {
 
       if (isOnboardingCompleted) {
         // Si onboarding terminé, rediriger vers le dashboard
-        redirectUrl = `${frontendUrl}/dashboard?auth=google&isFirstLogin=${loginResult.user.isFirstLogin}`;
+        redirectUrl = `${frontendUrl}/doclib?auth=google&isFirstLogin=${loginResult.user.isFirstLogin}`;
       } else {
         // Si onboarding non terminé, rediriger vers la page appropriée selon le type
         if (req.user.type === 'USER') {
-          redirectUrl = `${frontendUrl}/onboard/graduation?auth=google&isFirstLogin=${loginResult.user.isFirstLogin}`;
+          redirectUrl = `${frontendUrl}/onboarding/?auth=google&isFirstLogin=${loginResult.user.isFirstLogin}`;
         } else if (req.user.type === 'RECOMMENDER') {
-          redirectUrl = `${frontendUrl}/onboard/find-recommender?auth=google&isFirstLogin=${loginResult.user.isFirstLogin}`;
+          redirectUrl = `${frontendUrl}/onboarding/?auth=google&isFirstLogin=${loginResult.user.isFirstLogin}`;
         }
       }
     } else {
       // Cas par défaut, rediriger vers la page d'accueil
       redirectUrl = `${frontendUrl}?auth=google&isFirstLogin=${loginResult.user.isFirstLogin}`;
     }
-
     return res.redirect(redirectUrl);
   }
 
@@ -384,7 +362,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Non authentifié' })
   @ApiResponse({ status: 403, description: 'Email non vérifié' })
-  getProfile(@Request() req) {
+  getProfile(@Request() req: { user: User }) {
     return req.user;
   }
 
@@ -394,7 +372,7 @@ export class AuthController {
     status: 200,
     description: 'Déconnexion réussie',
   })
-  async logout(@Res({ passthrough: true }) res: Response) {
+  logout(@Res({ passthrough: true }) res: Response) {
     // Supprimer le cookie d'authentification
     res.clearCookie('auth_token', {
       httpOnly: true,

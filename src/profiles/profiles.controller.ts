@@ -13,7 +13,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ProfilesService } from './profiles.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
 import {
   ProfileDto,
   ProfileCreateDto,
@@ -28,6 +28,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { Profile } from '@prisma/client';
+import { SupabaseAuthGuard } from 'src/auth/guards/supabase-auth.guard';
 
 @ApiTags('Profils')
 @Controller('profiles')
@@ -54,8 +55,8 @@ export class ProfilesController {
   }
 
   @Get('search')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @UseGuards(SupabaseAuthGuard)
   @ApiOperation({ summary: 'Rechercher des profils par nom complet' })
   @ApiQuery({
     name: 'fullName',

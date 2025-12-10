@@ -29,7 +29,7 @@ export class PublicReferralsController {
   constructor(
     private readonly referralsService: ReferralsService,
     private readonly prisma: PrismaService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
   ) {}
 
   @Post('accept')

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { JobsFtService } from './jobs_ft.service';
 import { CreateJobsFtDto } from './dto/create-jobs_ft.dto';
 import { UpdateJobsFtDto } from './dto/update-jobs_ft.dto';
@@ -7,12 +15,12 @@ import { UpdateJobsFtDto } from './dto/update-jobs_ft.dto';
 export class JobsFtController {
   constructor(private readonly jobsFtService: JobsFtService) {}
 
-  @Post("create-job")
+  @Post('create-job')
   create(@Body() createJobsFtDto: CreateJobsFtDto) {
     return this.jobsFtService.create(createJobsFtDto);
   }
 
-  @Get("main-jobs")
+  @Get('main-jobs')
   findMainJobs() {
     return this.jobsFtService.findMainJobs();
   }

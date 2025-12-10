@@ -5,10 +5,8 @@ import {
   Res,
   Logger,
   HttpStatus,
-  BadRequestException,
   Body,
   UseGuards,
-  Param,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { StripeService } from './stripe.service';
@@ -23,8 +21,9 @@ import {
 import { StripeWebhookDto } from './dto/stripe-webhook.dto';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
 import { User } from '../users/decorators/user.decorator';
+import { SupabaseAuthGuard } from 'src/auth/guards/supabase-auth.guard';
 
 /**
  * Contrôleur pour gérer les interactions avec Stripe
@@ -42,7 +41,7 @@ export class StripeController {
    * @param dto Données pour la session de paiement
    */
   @Post('checkout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SupabaseAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Créer une session de paiement Stripe' })
   @ApiBody({ type: CreateCheckoutSessionDto })
@@ -111,12 +110,12 @@ export class StripeController {
       return response.status(HttpStatus.OK).json({ received: true });
     } catch (error) {
       this.logger.error(
-        `Erreur lors du traitement du webhook: ${error.message}`,
-        error.stack,
+        `Erreur lors du traitement du webhook: ${(error as Error).message}`,
+        (error as Error).stack,
       );
 
       return response.status(HttpStatus.BAD_REQUEST).json({
-        message: `Erreur de webhook: ${error.message}`,
+        message: `Erreur de webhook: ${(error as Error).message}`,
       });
     }
   }
@@ -127,7 +126,7 @@ export class StripeController {
    * @param dto Options d'annulation
    */
   @Post('cancel')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SupabaseAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Annuler un abonnement Stripe' })
   @ApiBody({ type: CancelSubscriptionDto })

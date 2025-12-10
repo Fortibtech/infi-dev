@@ -104,9 +104,6 @@ export class JwtPayload {
   email: string;
 }
 
-/**
- * Ancien type utilisé dans la doc, conservé si d’autres endpoints en dépendent.
- */
 export class TokenResponse {
   @ApiProperty({
     description: "Token JWT d'authentification",
@@ -155,7 +152,7 @@ export class AuthResponse {
     description: "Indique si l'onboarding est terminé",
     example: false,
   })
-  onboardingTermine: boolean;
+  onboardingComplet: boolean;
 
   @ApiProperty({ type: AuthUserResponse })
   user: AuthUserResponse;
